@@ -1,24 +1,9 @@
 import { Component, OnInit } from '@angular/core';
 import { Customer } from './customer';
-import { FormGroup, FormBuilder, Validators, ValidatorFn, AbstractControl } from '@angular/forms';
-
-function ratingRange(min: number, max: number): ValidatorFn {
-  return (c: AbstractControl): { [key: string]: boolean } | null => {
-    if (c.value !== null && (isNaN(c.value) || c.value < min || c.value > max)) {
-      return { 'range': true };
-    }
-    return null;
-  };
-}
-
-function emailMatcher(c: AbstractControl): { [key: string]: boolean } | null {
-  const emailControl = c.get('email');
-  const confirmControl = c.get('confirmEmail');
-  if (emailControl.value !== confirmControl.value) {
-    return { 'match': true };
-  }
-  return null;
-}
+import { FormGroup, FormBuilder, Validators, AbstractControl, FormArray } from '@angular/forms';
+import { debounceTime } from 'rxjs/operators';
+import { ratingRange } from './ratingRange';
+import { emailMatcher } from './emailMatcher';
 
 @Component({
   selector: 'app-customer',
@@ -28,6 +13,15 @@ function emailMatcher(c: AbstractControl): { [key: string]: boolean } | null {
 export class CustomerComponent implements OnInit {
   customerForm: FormGroup;
   customer = new Customer();
+  emailMessage;
+  private validationMessages = {
+    required: 'Please enter your email address.',
+    email: 'Please enter a valid email address.'
+  };
+
+  get addresses(): FormArray {
+    return <FormArray>this.customerForm.get('addresses');
+  }
 
   constructor(private builder: FormBuilder) { }
 
@@ -38,12 +32,20 @@ export class CustomerComponent implements OnInit {
       emailGroup: this.builder.group({
         email: ['', [Validators.required, Validators.email]],
         confirmEmail: ['', Validators.required]
-      }, {validator: emailMatcher}),
+      }, { validator: emailMatcher }),
       phone: '',
       notification: 'email',
       rating: [null, ratingRange(1, 5)],
-      sendCatalog: true
+      sendCatalog: true,
+      addresses: this.builder.array([this.buildAddress()])
     });
+
+    const emailControl = this.customerForm.get('emailGroup.email');
+    emailControl.valueChanges.pipe(
+      debounceTime(1000)
+    ).subscribe(
+      value => this.setMessage(emailControl)
+    );
   }
 
   populateTestData(): void {
@@ -63,5 +65,27 @@ export class CustomerComponent implements OnInit {
       phoneControl.clearValidators();
     }
     phoneControl.updateValueAndValidity();
+  }
+
+  setMessage(c: AbstractControl): void {
+    this.emailMessage = '';
+    if ((c.touched || c.dirty) && c.errors) {
+      this.emailMessage = Object.keys(c.errors).map(
+        key => this.emailMessage += this.validationMessages[key]).join('');
+    }
+  }
+
+  buildAddress(): FormGroup {
+    return this.builder.group({
+      addressType: 'home',
+      street1: '',
+      street2: '',
+      city: '',
+      zip: ''
+    });
+  }
+
+  addAddress(): void {
+    this.addresses.push(this.buildAddress());
   }
 }
