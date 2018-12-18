@@ -72,7 +72,7 @@ export class CustomerComponent implements OnInit {
     emailControl.valueChanges.pipe(
       debounceTime(1000)
     ).subscribe(
-      value => this.setMessage(emailControl)
+      _value => this.setMessage(emailControl)
     );
   }
 
